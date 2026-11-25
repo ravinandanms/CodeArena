@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEAM
+}
+
+enum CompetitionStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SubmissionStatus {
+  ACCEPTED
+  PARTIALLY_ACCEPTED
+  WRONG_ANSWER
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  TIME_LIMIT_EXCEEDED
+  INTERNAL_ERROR
+  PENDING
+}
+
+model User {
+  id             String         @id @default(cuid())
+  username       String         @unique
+  teamName       String
+  password       String
+  role           Role           @default(TEAM)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  submissions    Submission[]
+  solvedProblems ProblemSolve[]
+
+  @@index([role])
+  @@index([username])
+}
+
+model Competition {
+  id          String            @id @default(cuid())
+  name        String
+  description String?           @db.Text
+  duration    Int               @default(120) // Duration in minutes
+  startTime   DateTime?
+  endTime     DateTime?
+  status      CompetitionStatus @default(UPCOMING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  problems    Problem[]
+}
+
+model Problem {
+  id            String         @id @default(cuid())
+  title         String
+  description   String         @db.Text
+  difficulty    Difficulty     @default(EASY)
+  points        Int            @default(100)
+  inputFormat   String         @db.Text
+  outputFormat  String         @db.Text
+  constraints   String         @db.Text
+  timeLimit     Float          @default(2.0) // In seconds
+  memoryLimit   Int            @default(256) // In MB
+  order         Int            @default(1)
+  competitionId String?
+  competition   Competition?   @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  testCases     TestCase[]
+  submissions   Submission[]
+  solves        ProblemSolve[]
+
+  @@index([difficulty])
+  @@index([competitionId])
+}
+
+model TestCase {
+  id             String   @id @default(cuid())
+  problemId      String
+  problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  input          String   @db.Text
+  expectedOutput String   @db.Text
+  isHidden       Boolean  @default(false)
+  order          Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  @@index([problemId])
+}
+
+model Submission {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problemId      String
+  problem        Problem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  sourceCode     String           @db.Text
+  language       String
+  status         SubmissionStatus
+  passedTestCases Int             @default(0)
+  totalTestCases  Int             @default(0)
+  executionTime  Float?           // In seconds
+  compilerOutput String?          @db.Text
+  createdAt      DateTime         @default(now())
+
+  @@index([userId])
+  @@index([problemId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ProblemSolve {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problemId       String
+  problem         Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  awardedPoints   Int
+  passedTestCases Int      @default(0)
+  totalTestCases  Int      @default(0)
+  penaltySeconds  Int      @default(0) // Seconds from contest start to this solve
+  firstSolvedAt   DateTime @default(now())
+
+  @@unique([userId, problemId])
+  @@index([userId])
+  @@index([problemId])
+  @@index([firstSolvedAt])
+}
